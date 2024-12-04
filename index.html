@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DigiBite</title>
+  <style>
+    #video {
+      width: 100%; /* Atur agar kamera memenuhi lebar container */
+      height: auto;
+      max-width: 500px; /* Batasi ukuran maksimum */
+      border: 2px solid #ddd; /* Tambahkan border untuk visual */
+      border-radius: 8px; /* Membuat border melengkung */
+    }
+
+    #canvas {
+      width: 100%; /* Memperbesar tampilan hasil gambar di canvas */
+      height: auto;
+      max-width: 500px; /*ukuran maksimum */
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      display: none; /* Tetap disembunyikan sampai gambar diambil */
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <h1>DigiBite</h1>
+    <form id="food-form">
+      <!-- Ambil Foto Makanan dengan Kamera -->
+      <label> 
+        Ambil Foto Makanan:
+        <video id="video" autoplay></video>
+      </label>
+      <button type="button" id="snap">Ambil Foto</button>
+      
+      <!-- Upload Gambar dari File -->
+      <label for="file-upload">Upload Gambar dari Galeri/File:</label>
+      <input type="file" id="file-upload" accept="image/*" />
+      
+      <!-- Preview Gambar yang diambil -->
+      <canvas id="canvas"></canvas>
+    </form>
+
+    <!-- Hasil Analisis -->
+    <div id="result"></div>
+    <!-- Prompt tetap untuk analisis -->
+    <div class="prompt-box">
+      <p>Apa saja isi makanan tersebut dan berapa perkiraan kalorinya?</p>
+      <button type="submit" id="go-btn">Go</button>
+    </div>
+    <p class="output">(Results will appear here)</p>
+  </main>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const context = canvas.getContext('2d');
+    const fileUpload = document.getElementById('file-upload');
+    let imageFromUpload = false;
+
+    // Akses kamera belakang
+    navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { exact: 'environment' }  // Set to rear camera
+      }
+    })
+    .then((stream) => {
+      video.srcObject = stream;
+    })
+    .catch((err) => {
+      console.error("Error accessing camera: ", err);
+      alert("Tidak dapat mengakses kamera belakang. Pastikan izin diaktifkan.");
+    });
+
+    // Ambil foto saat tombol "Ambil Foto" diklik
+    document.getElementById('snap').addEventListener('click', () => {
+      canvas.width = video.videoWidth;  // Set lebar canvas sesuai video
+      canvas.height = video.videoHeight; // Set tinggi canvas sesuai video
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.style.display = 'block'; // Tampilkan canvas setelah foto diambil
+      imageFromUpload = false; // Menandai foto dari kamera
+    });
+
+    // Upload gambar dari file
+    fileUpload.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          canvas.width = img.width; // Set lebar canvas sesuai gambar
+          canvas.height = img.height; // Set tinggi canvas sesuai gambar
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.style.display = 'block'; // Tampilkan canvas setelah gambar diunggah
+        };
+        img.src = e.target.result;
+      };
+      
+      reader.readAsDataURL(file);
+      imageFromUpload = true; // Menandai gambar dari file upload
+    });
+
+    // Fungsi untuk analisis makanan
+    async function analyzeFood() {
+      // Ambil data gambar dari canvas dalam format base64
+      const base64String = canvas.toDataURL('image/png').split(',')[1];
+
+      // Kirim gambar ke API AI untuk analisis
+      const response = await fetch('/analyze-food', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ image: base64String })  // Mengirim data gambar dalam base64
+      });
+
+      const data = await response.json();
+      displayFoodInfo(data);
+    }
+
+    // Fungsi untuk menampilkan hasil analisis makanan
+    function displayFoodInfo(foodData) {
+      const foodInfo = `
+        <h2>${foodData.name}</h2>
+        <p>${foodData.description}</p>
+        <p>Perkiraan Kalori: ${foodData.calories} kcal</p>
+      `;
+      document.getElementById('result').innerHTML = foodInfo;
+    }
+
+    // Tombol "Go" untuk menjalankan analisis makanan
+    document.getElementById('go-btn').addEventListener('click', () => {
+      analyzeFood();  // Analisis makanan ketika "Go" diklik
+    });
+  </script>
+  <script type='module' src='main.js'></script>
+  <link rel="stylesheet" href="styles.css">
+
+</body>
+
+</html>
